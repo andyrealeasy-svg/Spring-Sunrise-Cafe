@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spring Sunrise Cafe 3D</title>
+    <!-- Подключаем Three.js для 3D графики -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        :root {
+            --color-morning: #F5F5DC;
+            --color-day: #FFFDD0;
+            --color-evening: #E6B3CC;
+            --color-night: #D4C4B7;
+            --color-card: rgba(255, 255, 255, 0.75);
+            --color-accent-pink: #E6B3CC;
+            --color-accent-gold: #E5C158;
+            --color-text: #5C4D44;
+            --color-text-light: #8B7A70;
+            --radius-lg: 16px; --radius-md: 10px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: var(--color-text);
+            overflow: hidden;
+            transition: background-color 3s ease;
+        }
+        body.morning { background-color: var(--color-morning); }
+        body.day     { background-color: var(--color-day); }
+        body.evening { background-color: var(--color-evening); }
+        body.night   { background-color: var(--color-night); }
+
+        #canvas3d { position: fixed; top: 0; left: 0; z-index: -1; width: 100vw; height: 100vh; }
+
+        #ui-layer {
+            position: absolute; top:0; left:0; width: 100%; height: 100%;
+            display: flex; flex-direction: column; padding: 20px;
+            pointer-events: none; /* Пропускаем клики мимо UI вниз (если нужно) */
+            overflow-y: auto;
+        }
+        
+        #ui-layer > * { pointer-events: auto; } /* Возвращаем кликабельность UI */
+
+        #start-overlay {
+            position: fixed; top:0; left:0; width:100%; height:100%; 
+            background: rgba(255,253,208, 0.9); z-index: 9999;
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(10px); flex-direction: column; gap: 20px;
+        }
+
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--color-card); padding: 16px 24px;
+            border-radius: var(--radius-lg); backdrop-filter: blur(12px);
+            margin-bottom: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+        }
+
+        .audio-controls { display: flex; gap: 12px; align-items: center; font-size: 0.9rem; }
+        .audio-controls label { display: flex; align-items: center; gap: 6px; }
+
+        main { display: grid; grid-template-columns: 350px 350px; gap: 20px; }
+
+        .cards-list { display: flex; flex-direction: column; gap: 12px; }
+        .card {
+            background: var(--color-card); border-radius: var(--radius-lg);
+            padding: 16px; backdrop-filter: blur(12px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); transition: transform 0.2s;
+        }
+        .card:hover { transform: translateY(-2px); }
+        
+        .progress-container {
+            width: 100%; height: 10px; background: #F0E6D2;
+            border-radius: 5px; margin: 10px 0; overflow: hidden;
+        }
+        .progress-fill { height: 100%; background: var(--color-accent-pink); width: 0%; transition: width 0.1s; }
+        .progress-fill.ready { background: var(--color-accent-gold); }
+
+        .btn {
+            width: 100%; padding: 10px; border: none; border-radius: var(--radius-md);
+            font-weight: bold; cursor: pointer; background: var(--color-accent-gold);
+            color: var(--color-text); transition: all 0.2s;
+        }
+        .btn:hover:not(:disabled) { filter: brightness(1.1); transform: scale(0.98); }
+        .btn:disabled { background: #d0d0d0; cursor: not-allowed; opacity: 0.7; }
+        .btn.btn-serve { background: var(--color-accent-pink); color: white; }
+
+        #notifications-container {
+            position: fixed; bottom: 20px; right: 20px;
+            display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+        }
+        .toast {
+            background: var(--color-card); padding: 12px 16px;
+            border-radius: var(--radius-md); border-left: 4px solid var(--color-accent-pink);
+            backdrop-filter: blur(8px); animation: fadeIn 0.3s, fadeOut 0.5s 4s forwards;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; transform: translateX(20px); } }
+
+        .reward-particle {
+            position: fixed; pointer-events: none; z-index: 10000; font-size: 2rem;
+        }
+        .floating-text {
+            position: fixed; pointer-events: none; z-index: 10000;
+            font-size: 1.5rem; font-weight: bold; color: var(--color-accent-gold);
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3); margin-top: -20px;
+        }
+
+    </style>
+</head>
+<body class="morning">
+
+    <div id="start-overlay">
+        <h1 style="color:var(--color-text); font-size:2rem;">🌸 Spring Sunrise Cafe 3D</h1>
+        <p style="color:var(--color-text-light);">Для активации аудио и 3D движка нажмите Старт</p>
+        <button class="btn" style="width: auto; padding: 15px 30px; font-size:1.2rem;" onclick="startGame()">▶ Начать смену</button>
+    </div>
+
+    <!-- 3D Конвас -->
+    <canvas id="canvas3d"></canvas>
+
+    <div id="ui-layer">
+        <header>
+            <h2>🌸 Sunrise Cafe</h2>
+            <div class="audio-controls">
+                <label>🎵 <input type="range" id="vol-music" min="0" max="1" step="0.1" value="0.5" onchange="setMusicVolume(this.value)"></label>
+                <label>🔊 <input type="range" id="vol-sfx" min="0" max="1" step="0.1" value="0.5" onchange="setSfxVolume(this.value)"></label>
+            </div>
+            <div style="display:flex; gap: 20px; font-weight: bold; font-size: 1.1rem;">
+                <span id="ui-time">🌅 Утро</span>
+                <span>🪙 <span id="ui-coins">0</span></span>
+                <span>✨ Уют: <span id="ui-cozy">0</span></span>
+            </div>
+        </header>
+
+        <main>
+            <section>
+                <h3 style="margin-bottom:10px;">Заказы (<span id="ui-q">0</span>/5)</h3>
+                <div id="orders-container" class="cards-list"></div>
+            </section>
+            <section>
+                <h3 style="margin-bottom:10px;">Улучшения</h3>
+                <div id="upgrades-container" class="cards-list"></div>
+            </section>
+        </main>
+    </div>
+
+    <div id="notifications-container"></div>
+
+    <script>
+        /**
+         * =========================================
+         * Spring Sunrise Cafe 3D - Геймплей и Движок
+         * =========================================
+         */
+
+        // --- 1. Данные и Настройки ---
+        const MENU = [
+            { id: 'tea', name: 'Ромашковый чай', icon: '🍵', time: 2, price: 5, reqLevel: 0 },
+            { id: 'croissant', name: 'Свежий Круассан', icon: '🥐', time: 4, price: 15, reqLevel: 1 },
+            { id: 'espresso', name: 'Эспрессо', icon: '☕', time: 3, price: 20, reqLevel: 2 },
+            { id: 'latte', name: 'Нежный Латте', icon: '☕', time: 6, price: 35, reqLevel: 3 },
+            { id: 'cappuccino', name: 'Капучино', icon: '☕', time: 5, price: 45, reqLevel: 4 },
+            { id: 'pancakes', name: 'Блинчики с медом', icon: '🥞', time: 8, price: 80, reqLevel: 5 },
+            { id: 'syrniki', name: 'Сырники', icon: '🥞', time: 10, price: 120, reqLevel: 6 },
+            { id: 'matcha', name: 'Матча Латте', icon: '🍵', time: 7, price: 150, reqLevel: 7 },
+            { id: 'cake', name: 'Весенний Торт', icon: '🍰', time: 12, price: 200, reqLevel: 8 },
+            { id: 'berry_pie', name: 'Ягодный пирог', icon: '🥧', time: 15, price: 300, reqLevel: 9 }
+        ];
+
+        const EVENTS = [
+            "За окном запела первая птица.",
+            "Клиент оставил веточку вербы.",
+            "Прошел легкий весенний дождь.",
+            "Мягкий свет залил столики кафе.",
+            "Кто-то читает книгу на диване."
+        ];
+
+        let state = JSON.parse(localStorage.getItem('cafe3DState')) || {
+            coins: 0, cozyLevel: 0, upgrades: { recipes: 0, decor: 0, barista: 0 }
+        };
+
+        const UPGRADES = {
+            recipes: { title: 'Новые рецепты', icon: '📖', baseCost: 30, mult: 2.2, maxLvl: MENU.length - 1, effect: l => `Меню: ${MENU[l] ? MENU[l].name : 'Максимум'}` },
+            decor: { title: 'Уютный декор', icon: '🪴', baseCost: 20, mult: 1.5, maxLvl: 10, effect: l => `Бонус: +${l * 15}% монет` },
+            barista: { title: 'Бариста-помощник', icon: '🧑‍🍳', baseCost: 100, mult: 2.5, maxLvl: 5, effect: l => l>0 ? `Скорость: ${(5 - l*0.8).toFixed(1)} сек` : 'Нет' }
+        };
+
+        let orders = [], nextOrderId = 1, timers = { day: 0, spawn: 0, barista: 0, event: 0 };
+        let lastTime = performance.now();
+        let gameRunning = false;
+
+        // --- 2. Аудио (Web Audio API) ---
+        let audioCtx, masterGain, musicGain, sfxGain;
+        
+        function initAudio() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            masterGain = audioCtx.createGain(); masterGain.connect(audioCtx.destination);
+            musicGain = audioCtx.createGain(); musicGain.connect(masterGain);
+            sfxGain = audioCtx.createGain(); sfxGain.connect(masterGain);
+            musicGain.gain.value = 0.5; sfxGain.gain.value = 0.5;
+
+            // Lo-Fi Drone Synth
+            const chords = [[261.63, 329.63, 392.00], [220.00, 261.63, 329.63], [174.61, 220.00, 261.63], [196.00, 246.94, 293.66]];
+            let cIdx = 0;
+            setInterval(() => {
+                if(audioCtx.state === 'suspended') return;
+                chords[cIdx].forEach((freq) => {
+                    const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+                    osc.type = 'sine'; osc.frequency.value = freq * 0.5;
+                    g.gain.setValueAtTime(0.001, audioCtx.currentTime);
+                    g.gain.linearRampToValueAtTime(0.05, audioCtx.currentTime + 3);
+                    g.gain.linearRampToValueAtTime(0.001, audioCtx.currentTime + 8);
+                    osc.connect(g); g.connect(musicGain); osc.start(); osc.stop(audioCtx.currentTime + 8);
+                });
+                cIdx = (cIdx + 1) % chords.length;
+            }, 8000);
+
+            // Vinyl noise for lo-fi
+            const bSize = audioCtx.sampleRate * 2;
+            const b = audioCtx.createBuffer(1, bSize, audioCtx.sampleRate);
+            const data = b.getChannelData(0);
+            for(let i=0; i<bSize; i++) data[i] = Math.random() * 2 - 1;
+            const noise = audioCtx.createBufferSource(); noise.buffer = b; noise.loop = true;
+            const bqf = audioCtx.createBiquadFilter(); bqf.type = 'lowpass'; bqf.frequency.value = 400;
+            const ng = audioCtx.createGain(); ng.gain.value = 0.02;
+            noise.connect(bqf); bqf.connect(ng); ng.connect(musicGain); noise.start();
+        }
+
+        function setMusicVolume(v) { if(musicGain) musicGain.gain.value = parseFloat(v); }
+        function setSfxVolume(v) { if(sfxGain) sfxGain.gain.value = parseFloat(v); }
+        
+        function playTone(freq, type, dur, vol, delay=0) {
+            if(!audioCtx || audioCtx.state === 'suspended') return;
+            const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+            osc.type = type; osc.frequency.value = freq;
+            const t = audioCtx.currentTime + delay;
+            g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.01, t + dur);
+            osc.connect(g); g.connect(sfxGain); osc.start(t); osc.stop(t + dur);
+        }
+
+        function playSound(type) {
+            if(type === 'click') playTone(600, 'sine', 0.1, 0.4);
+            if(type === 'serve') { playTone(1200, 'sine', 0.1, 0.4); playTone(1600, 'sine', 0.2, 0.4, 0.1); }
+            if(type === 'arrive') { playTone(400, 'triangle', 0.2, 0.3); playTone(500, 'triangle', 0.3, 0.3, 0.1); }
+            if(type === 'upgrade') { playTone(300,'square',0.1,0.2); playTone(400,'square',0.2,0.2,0.1); playTone(600,'square',0.4,0.3,0.3); }
+            if(type === 'event') playTone(800, 'sine', 0.5, 0.2);
+        }
+
+        // --- 3. Движок Three.js (3D Окружение) ---
+        let scene, camera, renderer, npcs3D = {};
+        let ambientLight, directionalLight;
+        
+        function getShaderColors(ph) {
+            const stops = [
+                { pct: 0.00, bg: new THREE.Color(0xF5F5DC), amb: new THREE.Color(0xffe4b5), dir: new THREE.Color(0xffdac1), dirInt: 0.8 },
+                { pct: 0.25, bg: new THREE.Color(0x87CEEB), amb: new THREE.Color(0xffffff), dir: new THREE.Color(0xfffee0), dirInt: 1.0 },
+                { pct: 0.50, bg: new THREE.Color(0xE6B3CC), amb: new THREE.Color(0xffb6c1), dir: new THREE.Color(0xffa07a), dirInt: 0.6 },
+                { pct: 0.75, bg: new THREE.Color(0x191970), amb: new THREE.Color(0x483D8B), dir: new THREE.Color(0x000033), dirInt: 0.2 },
+                { pct: 1.00, bg: new THREE.Color(0xF5F5DC), amb: new THREE.Color(0xffe4b5), dir: new THREE.Color(0xffdac1), dirInt: 0.8 }
+            ];
+            for(let i=0; i<stops.length-1; i++) {
+                if (ph >= stops[i].pct && ph <= stops[i+1].pct) {
+                    const range = stops[i+1].pct - stops[i].pct;
+                    const factor = (ph - stops[i].pct) / range;
+                    const bg = stops[i].bg.clone().lerp(stops[i+1].bg, factor);
+                    const amb = stops[i].amb.clone().lerp(stops[i+1].amb, factor);
+                    const dir = stops[i].dir.clone().lerp(stops[i+1].dir, factor);
+                    return {bg, amb, dir, dirInt: stops[i].dirInt + (stops[i+1].dirInt - stops[i].dirInt)*factor};
+                }
+            }
+            return stops[0];
+        }
+
+        function createItemMesh(id) {
+            const group = new THREE.Group();
+            let mat, geo, mesh;
+            switch(id) {
+                case 'tea':
+                    geo = new THREE.CylinderGeometry(0.2, 0.15, 0.3, 16);
+                    mat = new THREE.MeshPhysicalMaterial({color: 0x98FB98, roughness: 0.1, clearcoat: 1.0, transmission: 0.6, thickness: 0.2});
+                    mesh = new THREE.Mesh(geo, mat); mesh.position.y = 0.15; group.add(mesh);
+                    break;
+                case 'croissant':
+                    geo = new THREE.TorusGeometry(0.15, 0.08, 8, 16, Math.PI);
+                    mat = new THREE.MeshStandardMaterial({color: 0xCD853F, roughness: 0.8, bumpScale: 0.02});
+                    mesh = new THREE.Mesh(geo, mat);
+                    mesh.rotation.x = Math.PI/2; mesh.position.y = 0.1; group.add(mesh);
+                    break;
+                case 'espresso':
+                    geo = new THREE.CylinderGeometry(0.1, 0.08, 0.15, 16);
+                    mat = new THREE.MeshPhysicalMaterial({color: 0x3b2818, roughness: 0.1, clearcoat: 0.9});
+                    mesh = new THREE.Mesh(geo, mat); mesh.position.y = 0.075; group.add(mesh);
+                    break;
+                case 'latte':
+                    geo = new THREE.CylinderGeometry(0.15, 0.1, 0.4, 16);
+                    mat = new THREE.MeshPhysicalMaterial({color: 0xF5DEB3, roughness: 0.2, clearcoat: 0.8});
+                    mesh = new THREE.Mesh(geo, mat); mesh.position.y = 0.2; group.add(mesh);
+                    break;
+                case 'cappuccino':
+                    geo = new THREE.CylinderGeometry(0.15, 0.1, 0.3, 16);
+                    mat = new THREE.MeshPhysicalMaterial({color: 0xD2B48C, roughness: 0.2, clearcoat: 0.8});
+                    mesh = new THREE.Mesh(geo, mat); mesh.position.y = 0.15; group.add(mesh);
+                    const froth = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 8, 0, Math.PI*2, 0, Math.PI/2), new THREE.MeshStandardMaterial({color: 0xFFFAFA, roughness: 0.9}));
+                    froth.position.y = 0.3; group.add(froth);
+                    break;
+                case 'pancakes':
+                    mat = new THREE.MeshStandardMaterial({color: 0xF4A460, roughness: 0.6});
+                    for(let i=0; i<3; i++) {
+                        mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 16), mat);
+                        mesh.position.y = 0.025 + i*0.06; group.add(mesh);
+                    }
+                    break;
+                case 'syrniki':
+                    mat = new THREE.MeshStandardMaterial({color: 0xFFE4B5, roughness: 0.7});
+                    for(let i=0; i<2; i++) {
+                        mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 16), mat);
+                        mesh.position.set(i*0.1 - 0.05, 0.04, i*0.1 - 0.05); group.add(mesh);
+                    }
+                    break;
+                case 'matcha':
+                    geo = new THREE.CylinderGeometry(0.15, 0.1, 0.35, 16);
+                    mat = new THREE.MeshPhysicalMaterial({color: 0x9ACD32, roughness: 0.1, clearcoat: 0.9});
+                    mesh = new THREE.Mesh(geo, mat); mesh.position.y = 0.175; group.add(mesh);
+                    break;
+                case 'cake':
+                    geo = new THREE.BoxGeometry(0.25, 0.25, 0.25);
+                    mat = new THREE.MeshPhysicalMaterial({color: 0xFF69B4, roughness: 0.3, clearcoat: 0.5});
+                    mesh = new THREE.Mesh(geo, mat); mesh.position.y = 0.125; group.add(mesh);
+                    break;
+                case 'berry_pie':
+                    geo = new THREE.CylinderGeometry(0.25, 0.2, 0.1, 16);
+                    mat = new THREE.MeshPhysicalMaterial({color: 0x8B0000, roughness: 0.3, clearcoat: 0.8});
+                    mesh = new THREE.Mesh(geo, mat); mesh.position.y = 0.05; group.add(mesh);
+                    break;
+            }
+            return group;
+        }
+
+        function init3D() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 100);
+            camera.position.set(0, 12, 16); camera.lookAt(0, 0, 0);
+            
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas3d'), alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+            scene.background = new THREE.Color(0xF5F5DC);
+
+            // Освещение (мягкое)
+            ambientLight = new THREE.AmbientLight(0xfffdd0, 0.7);
+            scene.add(ambientLight);
+            
+            directionalLight = new THREE.DirectionalLight(0xffeedd, 0.6);
+            directionalLight.position.set(5, 15, 5); scene.add(directionalLight);
+
+            // Точечный свет для красивых бликов на предметах меню
+            const pointLight = new THREE.PointLight(0xfff5e6, 0.8, 15);
+            pointLight.position.set(0, 3, 1);
+            scene.add(pointLight);
+
+            // Пол
+            const flGeo = new THREE.PlaneGeometry(50, 50);
+            const flMat = new THREE.MeshStandardMaterial({ color: 0xE8DCC4, roughness: 0.9, metalness: 0.1 });
+            const fl = new THREE.Mesh(flGeo, flMat); fl.rotation.x = -Math.PI/2; scene.add(fl);
+
+            // Барная стойка
+            const countGeo = new THREE.BoxGeometry(10, 2, 2);
+            const countMat = new THREE.MeshPhysicalMaterial({ color: 0x8B7A70, roughness: 0.5, clearcoat: 0.3 });
+            const counter = new THREE.Mesh(countGeo, countMat); counter.position.set(0, 1, 1); scene.add(counter);
+
+            // Размещаем меню на стойке
+            const startX = -4; 
+            for(let i=0; i<MENU.length; i++) {
+                const item3D = createItemMesh(MENU[i].id);
+                item3D.position.set(startX + i*0.8, 2, 1);
+                item3D.name = `menu_item_${MENU[i].id}`;
+                scene.add(item3D);
+            }
+
+            // Герой (Бариста)
+            const bGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
+            const bMat = new THREE.MeshPhysicalMaterial({ color: 0xE6B3CC, roughness: 0.4, clearcoat: 0.5 }); // Pinkish
+            const barista = new THREE.Mesh(bGeo, bMat); barista.position.set(0, 1.5, -1);
+            barista.name = "barista"; scene.add(barista);
+
+            // Декорации (появляются при апгрейде уюта)
+            const decors = new THREE.Group();
+            decors.name = "decors";
+            scene.add(decors);
+
+            function addDecor(lvl, mesh) {
+                mesh.userData.reqLevel = lvl;
+                mesh.visible = false;
+                decors.add(mesh);
+            }
+
+            // Ур 1. Цветок на стойке
+            const pGeo = new THREE.CylinderGeometry(0.2, 0.15, 0.3, 8);
+            const pMat = new THREE.MeshPhysicalMaterial({color: 0x8B4513});
+            const pot1 = new THREE.Mesh(pGeo, pMat); pot1.position.set(-2, 2.15, 1);
+            const leafGeo = new THREE.SphereGeometry(0.3, 8, 8);
+            const leafMat = new THREE.MeshPhysicalMaterial({color: 0x2E8B57, roughness: 0.8});
+            const leaves1 = new THREE.Mesh(leafGeo, leafMat); leaves1.position.y = 0.3; pot1.add(leaves1);
+            addDecor(1, pot1);
+
+            // Ур 2. Ковер в центре
+            const rugGeo = new THREE.CylinderGeometry(3.5, 3.5, 0.05, 32);
+            const rugMat = new THREE.MeshStandardMaterial({color: 0xFA8072, roughness: 0.9});
+            const rug1 = new THREE.Mesh(rugGeo, rugMat); rug1.position.set(0, 0.025, 4);
+            addDecor(2, rug1);
+
+            // Ур 3. Подвесные светильники
+            const lampGroup = new THREE.Group();
+            const lampGeo = new THREE.ConeGeometry(0.4, 0.5, 16);
+            const lMat = new THREE.MeshStandardMaterial({color: 0x333333, roughness: 0.5});
+            for(let i=0; i<3; i++) {
+                const lp = new THREE.Mesh(lampGeo, lMat);
+                lp.position.set(-3 + i*3, 5, 1);
+                const string = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 3), new THREE.MeshStandardMaterial({color:0x000}));
+                string.position.y = 1.5; lp.add(string);
+                const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.15), new THREE.MeshBasicMaterial({color:0xffffee}));
+                bulb.position.y = -0.2; lp.add(bulb);
+                lampGroup.add(lp);
+            }
+            addDecor(3, lampGroup);
+
+            // Ур 4. Большое растение в углу
+            const tree = pot1.clone();
+            tree.scale.set(3, 4, 3);
+            tree.position.set(-8, 0.6, 2.5);
+            addDecor(4, tree);
+
+            // Ур 5. Книги на столике
+            const bkGroup = new THREE.Group();
+            const bk1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.6), new THREE.MeshStandardMaterial({color: 0x4682B4})); bk1.rotation.y = 0.2;
+            const bk2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.08, 0.5), new THREE.MeshStandardMaterial({color: 0x8B0000})); bk2.position.y = 0.09; bk2.rotation.y = -0.1;
+            bkGroup.add(bk1); bkGroup.add(bk2);
+            bkGroup.position.set(-6, 1.65, 5);
+            addDecor(5, bkGroup);
+
+            // Ур 6. Абстрактная картина на подставке
+            const picMat = new THREE.MeshStandardMaterial({color: 0x87CEFA});
+            const picFrameMat = new THREE.MeshStandardMaterial({color: 0x8B4513});
+            const pic = new THREE.Mesh(new THREE.BoxGeometry(2, 1.5, 0.1), picMat);
+            const picFrame = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.7, 0.05), picFrameMat);
+            picFrame.position.z = -0.05; pic.add(picFrame);
+            const stand1 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.5), picFrameMat); stand1.position.set(-0.8, -1.25, 0); pic.add(stand1);
+            const stand2 = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.5), picFrameMat); stand2.position.set(0.8, -1.25, 0); pic.add(stand2);
+            pic.position.set(8, 2.5, -2);
+            pic.rotation.y = -0.5;
+            addDecor(6, pic);
+
+            // Ур 7. Граммофон на стойке
+            const gramGr = new THREE.Group();
+            const gBase = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.6), new THREE.MeshStandardMaterial({color: 0x5C4033}));
+            gBase.position.y = 0.2; gramGr.add(gBase);
+            const gHorn = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.05, 0.6, 16, 1, true), new THREE.MeshStandardMaterial({color: 0xFFD700, side: THREE.DoubleSide}));
+            gHorn.position.set(0, 0.6, 0.2); gHorn.rotation.x = Math.PI/4; gramGr.add(gHorn);
+            gramGr.position.set(3.5, 2, 1);
+            addDecor(7, gramGr);
+
+            // Ур 8. Второй ковер
+            const rug2 = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 0.06, 32), new THREE.MeshStandardMaterial({color: 0x20B2AA, roughness: 0.9}));
+            rug2.position.set(6, 0.03, 8);
+            addDecor(8, rug2);
+
+            // Ур 9. Меню-доска позади баристы
+            const board = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 0.1), new THREE.MeshStandardMaterial({color: 0x2F4F4F}));
+            const bFrame = new THREE.Mesh(new THREE.BoxGeometry(3.2, 2.2, 0.05), new THREE.MeshStandardMaterial({color: 0x8B4513}));
+            bFrame.position.z = -0.05; board.add(bFrame);
+            board.position.set(0, 4, -3);
+            addDecor(9, board);
+
+            // Ур 10. Золотая фигурка манеки-неко
+            const catGr = new THREE.Group();
+            const cBody = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 0.3), new THREE.MeshStandardMaterial({color: 0xFFD700, roughness: 0.2, metalness: 0.8}));
+            cBody.position.y = 0.15; catGr.add(cBody);
+            const cHead = new THREE.Mesh(new THREE.SphereGeometry(0.18), new THREE.MeshStandardMaterial({color: 0xFFD700, roughness: 0.2, metalness: 0.8}));
+            cHead.position.y = 0.4; catGr.add(cHead);
+            catGr.position.set(2.5, 2, 1);
+            addDecor(10, catGr);
+
+            // Столики
+            const tGeo = new THREE.CylinderGeometry(1.5, 1.5, 0.2, 16);
+            const lGeo = new THREE.CylinderGeometry(0.2, 0.2, 1.5, 8);
+            for(let p of [[-6, 5], [6, 5], [-5, 10], [5, 10]]) {
+                const mat = new THREE.MeshPhysicalMaterial({ color: 0xD4C4B7, roughness: 0.2, clearcoat: 0.8 });
+                const t = new THREE.Mesh(tGeo, mat); t.position.set(p[0], 1.5, p[1]); scene.add(t);
+                const l = new THREE.Mesh(lGeo, mat); l.position.set(p[0], 0.75, p[1]); scene.add(l);
+            }
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        // --- Управление 3D NPC ---
+        function spawn3DClient(orderId) {
+            const geo = new THREE.BoxGeometry(0.8, 1.6, 0.8);
+            const colors = [0xFF9AA2, 0xFFB7B2, 0xFFDAC1, 0xE2F0CB, 0xB5EAD7, 0xC7CEEA];
+            const mat = new THREE.MeshPhysicalMaterial({ color: colors[Math.floor(Math.random()*colors.length)], roughness: 0.5, clearcoat: 0.4 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(15, 0.8, 10); // Вход из-за экрана
+            scene.add(mesh);
+            
+            const targetX = -4 + (orders.length * 1.8); // Место у стойки
+            npcs3D[orderId] = { mesh, target: new THREE.Vector3(targetX, 0.8, 3), state: 'ordering' };
+        }
+
+        function remove3DClient(orderId) {
+            if(!npcs3D[orderId]) return;
+            // Клиент идет за столик или радуется
+            npcs3D[orderId].state = 'served';
+            const rndTable = [[-6, 5], [6, 5]][Math.floor(Math.random()*2)];
+            npcs3D[orderId].target = new THREE.Vector3(rndTable[0], 0.8, rndTable[1]);
+            
+            // Удаляем через 4 секунды
+            setTimeout(() => {
+                if(npcs3D[orderId]) {
+                    scene.remove(npcs3D[orderId].mesh);
+                    delete npcs3D[orderId];
+                }
+            }, 4000);
+        }
+
+        function createParticles(x, y, emoji, count) {
+            for (let i = 0; i < count; i++) {
+                const p = document.createElement('div');
+                p.className = 'reward-particle';
+                p.innerText = emoji;
+                p.style.left = x + 'px';
+                p.style.top = y + 'px';
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 40 + Math.random() * 60;
+                const tx = Math.cos(angle) * dist;
+                const ty = Math.sin(angle) * dist;
+                
+                try {
+                    p.animate([
+                        { opacity: 1, transform: 'translate(-50%, -50%) scale(0.5)' },
+                        { opacity: 1, transform: `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(1.2)` },
+                        { opacity: 0, transform: `translate(calc(-50% + ${tx*1.5}px), calc(-50% + ${ty*1.5}px)) scale(1)` }
+                    ], { duration: 800 + Math.random()*400, fill: 'forwards', easing: 'ease-out' });
+                } catch(e) {}
+                document.body.appendChild(p);
+                setTimeout(() => { if(p.parentNode) p.remove() }, 1500);
+            }
+        }
+
+        function createFloatingText(x, y, text) {
+            const el = document.createElement('div');
+            el.className = 'floating-text';
+            el.innerText = text;
+            el.style.left = x + 'px';
+            el.style.top = y + 'px';
+            try {
+                el.animate([
+                    { opacity: 1, transform: 'translate(-50%, 0)' },
+                    { opacity: 0, transform: 'translate(-50%, -80px)' }
+                ], { duration: 1200, fill: 'forwards', easing: 'ease-out' });
+            } catch(e) {}
+            document.body.appendChild(el);
+            setTimeout(() => { if(el.parentNode) el.remove() }, 1500);
+        }
+
+        // --- 4. Игровая Логика UI ---
+        function updateUI() {
+            document.getElementById('ui-coins').innerText = Math.floor(state.coins);
+            document.getElementById('ui-cozy').innerText = state.cozyLevel;
+            document.getElementById('ui-q').innerText = orders.length;
+
+            const upgCont = document.getElementById('upgrades-container');
+            upgCont.innerHTML = '';
+            for(let id in UPGRADES) {
+                const u = UPGRADES[id], lvl = state.upgrades[id], cost = Math.floor(u.baseCost * Math.pow(u.mult, lvl));
+                const max = lvl >= u.maxLvl, can = state.coins >= cost && !max;
+                upgCont.innerHTML += `
+                    <div class="card">
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:5px;">
+                            <span>${u.icon} ${u.title}</span> <span>Ур. ${lvl}${max?'(МАКС)':''}</span>
+                        </div>
+                        <div style="font-size:0.9rem; color:var(--color-accent-pink); margin-bottom:10px;">${u.effect(lvl)}</div>
+                        ${!max ? `<button class="btn" style="background:${can?'var(--color-accent-gold)':'#eaeaea'}" ${can?'':'disabled'} onclick="buyUpg('${id}', event)">Улучшить 🪙 ${cost}</button>` : `<button class="btn" disabled>Абсолютный уют</button>`}
+                    </div>`;
+            }
+
+            const ordCont = document.getElementById('orders-container');
+            ordCont.innerHTML = '';
+            orders.forEach(o => {
+                const item = MENU.find(m => m.id === o.itemId);
+                const payout = Math.floor(item.price * (1 + state.upgrades.decor*0.15));
+                const pct = (o.progress / item.time) * 100;
+                
+                let btn = '';
+                if(o.state === 'waiting') btn = `<button class="btn" onclick="startOrder(${o.id})">Приготовить</button>`;
+                else if(o.state === 'prep') btn = `<button class="btn" disabled>Готовится...</button>`;
+                else btn = `<button class="btn btn-serve" onclick="serveOrder(${o.id}, event)">Подать 🪙 ${payout}</button>`;
+
+                ordCont.innerHTML += `
+                    <div class="card">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                            <b>${item.icon} ${item.name}</b> <b>🪙 ${payout}</b>
+                        </div>
+                        <div class="progress-container"><div class="progress-fill ${o.state==='ready'?'ready':''}" style="width:${pct}%"></div></div>
+                        ${btn}
+                    </div>`;
+            });
+        }
+
+        window.buyUpg = function(id, event) {
+            playSound('click');
+            const u = UPGRADES[id], cost = Math.floor(u.baseCost * Math.pow(u.mult, state.upgrades[id]));
+            if(state.coins >= cost) { 
+                state.coins -= cost; state.upgrades[id]++; playSound('upgrade'); 
+                const x = event ? event.clientX : window.innerWidth / 2;
+                const y = event ? event.clientY : window.innerHeight / 2;
+                createParticles(x, y, '✨', 8);
+                createFloatingText(x, y, `Улучшено!`);
+                updateUI(); 
+            }
+        }
+
+        function createOrder() {
+            if(orders.length >= 5) return;
+            const av = MENU.filter(m => m.reqLevel <= state.upgrades.recipes);
+            const it = av[Math.floor(Math.random() * av.length)];
+            const nid = nextOrderId++;
+            orders.push({ id: nid, itemId: it.id, state: 'waiting', progress: 0 });
+            playSound('arrive'); spawn3DClient(nid); updateUI();
+        }
+
+        window.startOrder = function(id) { playSound('click'); const o = orders.find(x=>x.id===id); if(o) o.state = 'prep'; updateUI(); }
+        window.serveOrder = function(id, event) {
+            playSound('serve');
+            const idx = orders.findIndex(x=>x.id===id); if(idx < 0) return;
+            const o = orders[idx], it = MENU.find(m => m.id === o.itemId);
+            const payout = Math.floor(it.price * (1 + state.upgrades.decor*0.15));
+            state.coins += payout; state.cozyLevel++;
+            
+            const x = event ? event.clientX : window.innerWidth / 2;
+            const y = event ? event.clientY : window.innerHeight / 2;
+            createParticles(x, y, '🪙', 5);
+            createFloatingText(x, y, `+${payout} 🪙`);
+            
+            orders.splice(idx, 1); remove3DClient(id); updateUI();
+        }
+
+        function triggerEvent() {
+            playSound('event');
+            const t = EVENTS[Math.floor(Math.random()*EVENTS.length)];
+            const d = document.createElement('div'); d.className = 'toast'; d.innerHTML = '✨ ' + t;
+            const cont = document.getElementById('notifications-container'); cont.appendChild(d);
+            setTimeout(()=> { if(d.parentNode) cont.removeChild(d); }, 5000);
+        }
+
+        // --- 5. Игровой Цикл ---
+        function loop(t) {
+            const dt = (t - lastTime) / 1000; lastTime = t;
+
+            // Время суток
+            timers.day += dt; const dLen = 60, ph = (timers.day % dLen)/dLen;
+            let cls = 'morning', title = '🌅 Утро';
+            if(ph>0.25) { cls='day'; title='☀️ День'; }
+            if(ph>0.5)  { cls='evening'; title='🌆 Вечер'; }
+            if(ph>0.75) { cls='night'; title='🌙 Ночь'; }
+            if(document.body.className !== cls) { document.body.className = cls; document.getElementById('ui-time').innerText = title; }
+
+            // Обновление шейдеров (цветов света и фона)
+            if(scene && ambientLight && directionalLight) {
+                const colors = getShaderColors(ph);
+                scene.background = colors.bg;
+                ambientLight.color = colors.amb;
+                directionalLight.color = colors.dir;
+                directionalLight.intensity = colors.dirInt;
+
+                // Обновляем видимость предметов меню на стойке
+                for (let i = 0; i < MENU.length; i++) {
+                    const itemGroup = scene.getObjectByName(`menu_item_${MENU[i].id}`);
+                    if(itemGroup) {
+                        const isUnlocked = state.upgrades.recipes >= MENU[i].reqLevel;
+                        itemGroup.visible = isUnlocked;
+                    }
+                }
+            }
+
+            // Обновляем видимость предметов декора
+            if (scene) {
+                const decGr = scene.getObjectByName("decors");
+                if (decGr) {
+                    decGr.children.forEach(d => {
+                        d.visible = state.upgrades.decor >= d.userData.reqLevel;
+                    });
+                }
+            }
+
+            // Обновление прогресса заказов
+            let changed = false;
+            orders.forEach(o => {
+                if(o.state === 'prep') {
+                    const it = MENU.find(m => m.id === o.itemId);
+                    o.progress += dt;
+                    if(o.progress >= it.time) { o.progress = it.time; o.state = 'ready'; }
+                    changed = true;
+                }
+            });
+
+            // Авто-Бариста
+            if(state.upgrades.barista > 0) {
+                timers.barista += dt;
+                const spd = Math.max(0.5, 5 - state.upgrades.barista*0.8);
+                if(timers.barista > spd) {
+                    timers.barista = 0;
+                    const r = orders.find(x=>x.state==='ready');
+                    if(r) serveOrder(r.id);
+                    else { const w = orders.find(x=>x.state==='waiting'); if(w) startOrder(w.id); }
+                }
+            }
+
+            // Спавн Посетителей
+            timers.spawn -= dt;
+            if(timers.spawn <= 0) { createOrder(); timers.spawn = 4 + Math.random()*5; }
+
+            // Спавн Событий
+            timers.event += dt;
+            if(timers.event > 15) { if(Math.random()<0.3) triggerEvent(); timers.event = 0; }
+
+            // Обновление 3D
+            const bMesh = scene.getObjectByName("barista");
+            if(bMesh) bMesh.rotation.y = Math.sin(t*0.002)*0.2; // Бариста дышит/крутится
+            
+            for(let k in npcs3D) {
+                const n = npcs3D[k];
+                n.mesh.position.lerp(n.target, dt*3);
+                if(n.state === 'served') n.mesh.rotation.y += dt*4; // Клиент радуется
+            }
+            renderer.render(scene, camera);
+
+            if(changed) updateUI();
+            if(Math.random() < 0.01) localStorage.setItem('cafe3DState', JSON.stringify(state)); // Редкое автосохранение
+
+            requestAnimationFrame(loop);
+        }
+
+        window.startGame = function() {
+            document.getElementById('start-overlay').style.display = 'none';
+            initAudio();
+            init3D();
+            updateUI();
+            lastTime = performance.now();
+            requestAnimationFrame(loop);
+        }
+    </script>
+</body>
+</html>
