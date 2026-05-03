@@ -41,7 +41,41 @@
             overflow-y: auto;
         }
         
-        #ui-layer > * { pointer-events: auto; } /* Возвращаем кликабельность UI */
+        #ui-layer > * { pointer-events: none; }
+        header, .toast, #event-banner { pointer-events: auto; }
+        section { pointer-events: auto; }
+        
+        #mobile-menu-toggle { display: none; }
+
+        @media (max-width: 768px) {
+            #ui-layer { padding: 10px; justify-content: flex-start; }
+            header { margin-bottom: 10px; padding: 12px; gap: 10px; }
+            
+            #mobile-menu-toggle {
+                display: flex; align-items: center; justify-content: center; gap: 8px;
+                position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+                z-index: 1001; padding: 14px 28px; font-size: 1.1rem; font-weight: bold;
+                background: var(--color-accent-pink); color: white; border: none;
+                border-radius: 30px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                pointer-events: auto; cursor: pointer; transition: 0.2s;
+            }
+            #mobile-menu-toggle:active { transform: translate(-50%, 2px); }
+
+            main { 
+                position: fixed; bottom: 0; left: 0; width: 100%; height: auto;
+                background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(20px);
+                border-radius: 24px 24px 0 0; padding: 20px; padding-bottom: 80px;
+                box-sizing: border-box; grid-template-columns: 1fr; gap: 20px; max-height: 80vh; overflow-y: auto;
+                margin: 0; box-shadow: 0 -5px 20px rgba(0,0,0,0.15);
+                transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+                pointer-events: auto;
+            }
+            
+            main.open { transform: translateY(0); }
+            
+            .cards-list { flex-direction: column; overflow-x: visible; scroll-snap-type: none; }
+            .card { min-width: auto; scroll-snap-align: none; flex-shrink: 1; }
+        }
 
         #start-overlay {
             position: fixed; top:0; left:0; width:100%; height:100%; 
@@ -51,7 +85,7 @@
         }
 
         header {
-            display: flex; justify-content: space-between; align-items: center;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;
             background: var(--color-card); padding: 16px 24px;
             border-radius: var(--radius-lg); backdrop-filter: blur(12px);
             margin-bottom: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.05);
@@ -60,7 +94,7 @@
         .audio-controls { display: flex; gap: 12px; align-items: center; font-size: 0.9rem; }
         .audio-controls label { display: flex; align-items: center; gap: 6px; }
 
-        main { display: grid; grid-template-columns: 350px 350px; gap: 20px; }
+        main { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(300px, 1fr); max-width: 900px; gap: 20px; }
 
         .cards-list { display: flex; flex-direction: column; gap: 12px; }
         .card {
@@ -106,6 +140,15 @@
             font-size: 1.5rem; font-weight: bold; color: var(--color-accent-gold);
             text-shadow: 0 2px 4px rgba(0,0,0,0.3); margin-top: -20px;
         }
+        
+        #event-banner {
+            display:none; position:fixed; top:20px; left:50%; transform:translateX(-50%); 
+            background:var(--color-accent-pink); color:white; padding:10px 20px; 
+            border-radius:var(--radius-lg); z-index:1000; font-weight:bold; 
+            box-shadow:0 4px 12px rgba(0,0,0,0.2); animation:slideDown 0.3s forwards;
+            text-align: center;
+        }
+        @keyframes slideDown { from { transform: translate(-50%, -100%); } to { transform: translate(-50%, 0); } }
 
     </style>
 </head>
@@ -117,20 +160,32 @@
         <button class="btn" style="width: auto; padding: 15px 30px; font-size:1.2rem;" onclick="startGame()">▶ Начать смену</button>
     </div>
 
+    <!-- Уведомление об активном событии -->
+    <div id="event-banner">
+        <span id="event-title"></span>
+        <div style="font-size:0.8rem; font-weight:normal;" id="event-desc"></div>
+    </div>
+
     <!-- 3D Конвас -->
     <canvas id="canvas3d"></canvas>
+    
+    <button id="mobile-menu-toggle" onclick="toggleMobileMenu()">📋 Меню (0)</button>
 
     <div id="ui-layer">
         <header>
-            <h2>🌸 Sunrise Cafe</h2>
-            <div class="audio-controls">
-                <label>🎵 <input type="range" id="vol-music" min="0" max="1" step="0.1" value="0.5" onchange="setMusicVolume(this.value)"></label>
-                <label>🔊 <input type="range" id="vol-sfx" min="0" max="1" step="0.1" value="0.5" onchange="setSfxVolume(this.value)"></label>
+            <div style="display:flex; flex-direction:column; gap:5px;">
+                <h2>🌸 Spring Sunrise Cafe</h2>
+                <div class="audio-controls">
+                    <label>🎵 <input style="pointer-events: auto;" type="range" id="vol-music" min="0" max="1" step="0.1" value="0.5" oninput="setMusicVolume(this.value)" onchange="setMusicVolume(this.value)"></label>
+                    <label>🔊 <input style="pointer-events: auto;" type="range" id="vol-sfx" min="0" max="1" step="0.1" value="0.5" oninput="setSfxVolume(this.value)" onchange="setSfxVolume(this.value)"></label>
+                </div>
             </div>
-            <div style="display:flex; gap: 20px; font-weight: bold; font-size: 1.1rem;">
+            <div style="display:flex; gap: 15px; font-weight: bold; font-size: 1rem; flex-wrap: wrap; justify-content: flex-end; align-items:center;">
+                <span id="ui-day-counter">📅 День 1</span>
                 <span id="ui-time">🌅 Утро</span>
                 <span>🪙 <span id="ui-coins">0</span></span>
                 <span>✨ Уют: <span id="ui-cozy">0</span></span>
+                <span>📈 Поп-ть: <span id="ui-pop">0</span></span>
             </div>
         </header>
 
@@ -141,7 +196,10 @@
             </section>
             <section>
                 <h3 style="margin-bottom:10px;">Улучшения</h3>
-                <div id="upgrades-container" class="cards-list"></div>
+                <div id="upgrades-container" class="cards-list" style="margin-bottom:20px;"></div>
+                
+                <h3 style="margin-bottom:10px;">Действия (Реклама)</h3>
+                <div id="ads-container" class="cards-list"></div>
             </section>
         </main>
     </div>
@@ -177,19 +235,105 @@
             "Кто-то читает книгу на диване."
         ];
 
+        const GAME_EVENTS = [
+            { id: 'rush', name: 'Наплыв посетителей', desc: 'Скорость появления клиентов удвоена!', duration: 20 },
+            { id: 'broken', name: 'Сломалась кофемашина', desc: 'Время приготовления в 2 раза дольше!', duration: 15 },
+            { id: 'blogger', name: 'Известный блогер', desc: 'Люди замечают кафе. Чаевые удвоены!', duration: 20 },
+        ];
+
         let state = JSON.parse(localStorage.getItem('cafe3DState')) || {
-            coins: 0, cozyLevel: 0, upgrades: { recipes: 0, decor: 0, barista: 0 }
+            coins: 0, cozyLevel: 0, totalTime: 0, lastSaveTs: Date.now(),
+            upgrades: { recipes: 0, decor: 0, barista: 0, marketing: 0, equipment: 0, prestige: 0 }
         };
+
+        // Защита новых полей при загрузке старых сохранений
+        if (state.totalTime === undefined) state.totalTime = 0;
+        if (state.upgrades.marketing === undefined) state.upgrades.marketing = 0;
+        if (state.upgrades.equipment === undefined) state.upgrades.equipment = 0;
+        if (state.upgrades.prestige === undefined) state.upgrades.prestige = 0;
+        if (state.lastSaveTs === undefined) state.lastSaveTs = Date.now();
+
+        let initOfflineCoins = 0;
+        if(state.lastSaveTs) {
+            const now = Date.now();
+            let diffSec = (now - state.lastSaveTs) / 1000;
+            if(diffSec > 60) { // Off for more than 1 minute
+                const maxOfflineSec = 3600; // Max 1 hour offline earnings
+                if(diffSec > maxOfflineSec) diffSec = maxOfflineSec;
+                
+                const tipMult = 1 + (state.upgrades.decor * 0.15);
+                const rate = Math.max(2.0, 10 - (state.upgrades.marketing * 1.5 + state.cozyLevel * 0.1) * 0.2);
+                
+                const customers = diffSec / rate;
+                // Average price approx 50 coins mid-game
+                const avgPrice = 20 + state.upgrades.recipes * 25;
+                const earned = Math.floor(customers * avgPrice * tipMult * 0.4); // 40% efficiency
+                
+                if (earned > 0) {
+                    state.coins += earned;
+                    initOfflineCoins = earned;
+                }
+            }
+        }
+        state.lastSaveTs = Date.now();
 
         const UPGRADES = {
             recipes: { title: 'Новые рецепты', icon: '📖', baseCost: 30, mult: 2.2, maxLvl: MENU.length - 1, effect: l => `Меню: ${MENU[l] ? MENU[l].name : 'Максимум'}` },
-            decor: { title: 'Уютный декор', icon: '🪴', baseCost: 20, mult: 1.5, maxLvl: 10, effect: l => `Бонус: +${l * 15}% монет` },
-            barista: { title: 'Бариста-помощник', icon: '🧑‍🍳', baseCost: 100, mult: 2.5, maxLvl: 5, effect: l => l>0 ? `Скорость: ${(5 - l*0.8).toFixed(1)} сек` : 'Нет' }
+            decor: { title: 'Уютный декор', icon: '🪴', baseCost: 20, mult: 1.5, maxLvl: 10, effect: l => `Бонус к чаевым: +${l * 15}%` },
+            barista: { title: 'Бариста-помощник', icon: '🧑‍🍳', baseCost: 100, mult: 2.5, maxLvl: 5, effect: l => l>0 ? `Авто-действия: ${(5 - l*0.8).toFixed(1)} сек` : 'Нет автокликера' },
+            marketing: { title: 'Маркетинг', icon: '📈', baseCost: 60, mult: 1.8, maxLvl: 10, effect: l => `Приток клиентов: Ур. ${l}` },
+            equipment: { title: 'Оборудование', icon: '⚙️', baseCost: 80, mult: 2.0, maxLvl: 5, effect: l => `Ускорение готовки: -${l * 10}%` },
+            prestige: { title: 'Золотой статус', icon: '⭐', baseCost: 5000, mult: 1.4, maxLvl: 9999, effect: l => `Элитный статус заведения: ур. ${l}` }
         };
 
-        let orders = [], nextOrderId = 1, timers = { day: 0, spawn: 0, barista: 0, event: 0 };
+        const ADS = [
+            { id: 'flyer', name: 'Листовки', cost: 50, duration: 30, boost: 1.5, icon: '📄' },
+            { id: 'target', name: 'Таргет', cost: 200, duration: 60, boost: 2.5, icon: '📱' },
+            { id: 'tv', name: 'ТВ Реклама', cost: 1000, duration: 120, boost: 5.0, icon: '📺' }
+        ];
+
+        let orders = [], nextOrderId = 1;
+        let timers = { spawn: 0, barista: 0, eventText: 0, ad: 0, gameEvent: 0 };
+        let activeAdBoost = 1.0;
+        let activeAdId = null;
+        let activeEvent = { id: null };
+        let currentPhaseStr = 'morning';
         let lastTime = performance.now();
         let gameRunning = false;
+
+        function getPrepTime(baseItemTime) {
+            let t = baseItemTime * (1 - state.upgrades.equipment * 0.10);
+            if (activeEvent.id === 'broken') t *= 2.0;
+            return Math.max(0.5, t);
+        }
+
+        function getSpawnRate() {
+            let rate = 10;
+            if(currentPhaseStr === 'morning') rate -= 4; // Утром частые (6)
+            if(currentPhaseStr === 'day') rate -= 1;     // Днем норм (9)
+            if(currentPhaseStr === 'evening') rate += 4; // Вечером реже (14)
+            if(currentPhaseStr === 'night') rate += 10;  // Ночью очень редко (20)
+            
+            // Влияние популярности (маркетинг + уют)
+            let pop = state.upgrades.marketing * 1.5 + state.cozyLevel * 0.1; 
+            rate -= pop * 0.4;
+            
+            if(timers.ad > 0) rate /= activeAdBoost; // Буст от платной рекламы
+            if(activeEvent.id === 'rush') rate *= 0.5; // Буст от ивента
+            
+            return Math.max(1.0, rate); // Не спавнить быстрее 1.0 сек
+        }
+
+        function getTipMultiplier() {
+            let mult = 1 + (state.upgrades.decor * 0.15);
+            // Ночью клиентов меньше, но чаевые гуще (атмосфера!)
+            if(currentPhaseStr === 'morning') mult *= 0.9;
+            if(currentPhaseStr === 'evening') mult *= 1.2;
+            if(currentPhaseStr === 'night') mult *= 1.5;
+            
+            if(activeEvent.id === 'blogger') mult *= 2.0;
+            return mult;
+        }
 
         // --- 2. Аудио (Web Audio API) ---
         let audioCtx, masterGain, musicGain, sfxGain;
@@ -252,6 +396,51 @@
         let scene, camera, renderer, npcs3D = {};
         let ambientLight, directionalLight;
         
+        function createWoodTexture(color1, color2) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = color1; ctx.fillRect(0,0,256,256);
+            ctx.fillStyle = color2;
+            for(let i=0; i<150; i++) {
+                ctx.globalAlpha = Math.random() * 0.3 + 0.1;
+                ctx.fillRect(Math.random()*256, 0, Math.random()*3+1, 256);
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        function createWoolTexture(baseColor) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = baseColor; ctx.fillRect(0,0,128,128);
+            for(let i=0; i<1500; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.15)';
+                ctx.fillRect(Math.random()*128, Math.random()*128, 2, 2);
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        }
+
+        function createTileTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#E8DCC4'; ctx.fillRect(0,0,256,256);
+            ctx.strokeStyle = '#d8cca4'; ctx.lineWidth = 4;
+            ctx.strokeRect(0,0,256,256);
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(15, 15);
+            return tex;
+        }
+        
+        // Кэшированные текстуры
+        let texWood, texWoodDark, texFloor, texWool1, texWool2;
+
         function getShaderColors(ph) {
             const stops = [
                 { pct: 0.00, bg: new THREE.Color(0xF5F5DC), amb: new THREE.Color(0xffe4b5), dir: new THREE.Color(0xffdac1), dirInt: 0.8 },
@@ -338,6 +527,40 @@
             return group;
         }
 
+        function createHuman(colorTheme, isBarista) {
+            const group = new THREE.Group();
+            
+            const headMat = new THREE.MeshPhysicalMaterial({ color: 0xffdac1, roughness: 0.6 });
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), headMat);
+            head.position.y = 1.45; group.add(head);
+
+            const bodyMat = new THREE.MeshPhysicalMaterial({ color: colorTheme, roughness: 0.8 });
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.3), bodyMat);
+            body.position.y = 0.95; group.add(body);
+
+            const armGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.7);
+            const lArm = new THREE.Mesh(armGeo, bodyMat); lArm.position.set(-0.35, 0.95, 0); lArm.rotation.z = 0.2; group.add(lArm);
+            const rArm = new THREE.Mesh(armGeo, bodyMat); rArm.position.set(0.35, 0.95, 0); rArm.rotation.z = -0.2; group.add(rArm);
+
+            const legMat = new THREE.MeshPhysicalMaterial({ color: 0x222222, roughness: 0.9 });
+            const legGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.6);
+            const lLeg = new THREE.Mesh(legGeo, legMat); lLeg.position.set(-0.15, 0.3, 0); group.add(lLeg);
+            const rLeg = new THREE.Mesh(legGeo, legMat); rLeg.position.set(0.15, 0.3, 0); group.add(rLeg);
+
+            if (isBarista) {
+                const apronMat = new THREE.MeshPhysicalMaterial({ color: 0x4682B4, roughness: 0.9 });
+                const apron = new THREE.Mesh(new THREE.PlaneGeometry(0.51, 0.65), apronMat);
+                apron.position.set(0, 0.92, 0.16); group.add(apron);
+                
+                const hatMat = new THREE.MeshPhysicalMaterial({ color: 0x222222, roughness: 0.9 });
+                const hat = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.1), hatMat);
+                hat.position.y = 1.7; group.add(hat);
+            }
+            
+            group.scale.set(1.4, 1.4, 1.4);
+            return group;
+        }
+
         function init3D() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 100);
@@ -347,6 +570,13 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
 
             scene.background = new THREE.Color(0xF5F5DC);
+
+            // Инициализация текстур
+            texWood = createWoodTexture('#D4C4B7', '#c0ad9e');
+            texWoodDark = createWoodTexture('#8B7A70', '#706056');
+            texFloor = createTileTexture();
+            texWool1 = createWoolTexture('#FA8072');
+            texWool2 = createWoolTexture('#20B2AA');
 
             // Освещение (мягкое)
             ambientLight = new THREE.AmbientLight(0xfffdd0, 0.7);
@@ -362,27 +592,26 @@
 
             // Пол
             const flGeo = new THREE.PlaneGeometry(50, 50);
-            const flMat = new THREE.MeshStandardMaterial({ color: 0xE8DCC4, roughness: 0.9, metalness: 0.1 });
+            const flMat = new THREE.MeshStandardMaterial({ color: 0xffffff, map: texFloor, roughness: 0.9, metalness: 0.1 });
             const fl = new THREE.Mesh(flGeo, flMat); fl.rotation.x = -Math.PI/2; scene.add(fl);
 
             // Барная стойка
-            const countGeo = new THREE.BoxGeometry(10, 2, 2);
-            const countMat = new THREE.MeshPhysicalMaterial({ color: 0x8B7A70, roughness: 0.5, clearcoat: 0.3 });
-            const counter = new THREE.Mesh(countGeo, countMat); counter.position.set(0, 1, 1); scene.add(counter);
+            const countGeo = new THREE.BoxGeometry(10, 1.3, 2);
+            const countMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: texWoodDark, roughness: 0.5, clearcoat: 0.3 });
+            const counter = new THREE.Mesh(countGeo, countMat); counter.position.set(0, 0.65, 1); scene.add(counter);
 
             // Размещаем меню на стойке
             const startX = -4; 
             for(let i=0; i<MENU.length; i++) {
                 const item3D = createItemMesh(MENU[i].id);
-                item3D.position.set(startX + i*0.8, 2, 1);
+                item3D.position.set(startX + i*0.8, 1.3, 1);
                 item3D.name = `menu_item_${MENU[i].id}`;
                 scene.add(item3D);
             }
 
             // Герой (Бариста)
-            const bGeo = new THREE.CylinderGeometry(0.5, 0.5, 2, 16);
-            const bMat = new THREE.MeshPhysicalMaterial({ color: 0xE6B3CC, roughness: 0.4, clearcoat: 0.5 }); // Pinkish
-            const barista = new THREE.Mesh(bGeo, bMat); barista.position.set(0, 1.5, -1);
+            const barista = createHuman(0xE6B3CC, true);
+            barista.position.set(0, 0, -1);
             barista.name = "barista"; scene.add(barista);
 
             // Декорации (появляются при апгрейде уюта)
@@ -399,7 +628,7 @@
             // Ур 1. Цветок на стойке
             const pGeo = new THREE.CylinderGeometry(0.2, 0.15, 0.3, 8);
             const pMat = new THREE.MeshPhysicalMaterial({color: 0x8B4513});
-            const pot1 = new THREE.Mesh(pGeo, pMat); pot1.position.set(-2, 2.15, 1);
+            const pot1 = new THREE.Mesh(pGeo, pMat); pot1.position.set(-2, 1.45, 1);
             const leafGeo = new THREE.SphereGeometry(0.3, 8, 8);
             const leafMat = new THREE.MeshPhysicalMaterial({color: 0x2E8B57, roughness: 0.8});
             const leaves1 = new THREE.Mesh(leafGeo, leafMat); leaves1.position.y = 0.3; pot1.add(leaves1);
@@ -407,7 +636,7 @@
 
             // Ур 2. Ковер в центре
             const rugGeo = new THREE.CylinderGeometry(3.5, 3.5, 0.05, 32);
-            const rugMat = new THREE.MeshStandardMaterial({color: 0xFA8072, roughness: 0.9});
+            const rugMat = new THREE.MeshStandardMaterial({color: 0xffffff, map: texWool1, roughness: 0.9});
             const rug1 = new THREE.Mesh(rugGeo, rugMat); rug1.position.set(0, 0.025, 4);
             addDecor(2, rug1);
 
@@ -437,7 +666,7 @@
             const bk1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.6), new THREE.MeshStandardMaterial({color: 0x4682B4})); bk1.rotation.y = 0.2;
             const bk2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.08, 0.5), new THREE.MeshStandardMaterial({color: 0x8B0000})); bk2.position.y = 0.09; bk2.rotation.y = -0.1;
             bkGroup.add(bk1); bkGroup.add(bk2);
-            bkGroup.position.set(-6, 1.65, 5);
+            bkGroup.position.set(-6, 1.25, 5);
             addDecor(5, bkGroup);
 
             // Ур 6. Абстрактная картина на подставке
@@ -458,11 +687,11 @@
             gBase.position.y = 0.2; gramGr.add(gBase);
             const gHorn = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.05, 0.6, 16, 1, true), new THREE.MeshStandardMaterial({color: 0xFFD700, side: THREE.DoubleSide}));
             gHorn.position.set(0, 0.6, 0.2); gHorn.rotation.x = Math.PI/4; gramGr.add(gHorn);
-            gramGr.position.set(3.5, 2, 1);
+            gramGr.position.set(3.5, 1.3, 1);
             addDecor(7, gramGr);
 
             // Ур 8. Второй ковер
-            const rug2 = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 0.06, 32), new THREE.MeshStandardMaterial({color: 0x20B2AA, roughness: 0.9}));
+            const rug2 = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 0.06, 32), new THREE.MeshStandardMaterial({color: 0xffffff, map: texWool2, roughness: 0.9}));
             rug2.position.set(6, 0.03, 8);
             addDecor(8, rug2);
 
@@ -479,16 +708,16 @@
             cBody.position.y = 0.15; catGr.add(cBody);
             const cHead = new THREE.Mesh(new THREE.SphereGeometry(0.18), new THREE.MeshStandardMaterial({color: 0xFFD700, roughness: 0.2, metalness: 0.8}));
             cHead.position.y = 0.4; catGr.add(cHead);
-            catGr.position.set(2.5, 2, 1);
+            catGr.position.set(2.5, 1.3, 1);
             addDecor(10, catGr);
 
             // Столики
             const tGeo = new THREE.CylinderGeometry(1.5, 1.5, 0.2, 16);
             const lGeo = new THREE.CylinderGeometry(0.2, 0.2, 1.5, 8);
             for(let p of [[-6, 5], [6, 5], [-5, 10], [5, 10]]) {
-                const mat = new THREE.MeshPhysicalMaterial({ color: 0xD4C4B7, roughness: 0.2, clearcoat: 0.8 });
-                const t = new THREE.Mesh(tGeo, mat); t.position.set(p[0], 1.5, p[1]); scene.add(t);
-                const l = new THREE.Mesh(lGeo, mat); l.position.set(p[0], 0.75, p[1]); scene.add(l);
+                const mat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, map: texWood, roughness: 0.5, clearcoat: 0.3 });
+                const t = new THREE.Mesh(tGeo, mat); t.position.set(p[0], 1.1, p[1]); scene.add(t);
+                const l = new THREE.Mesh(lGeo, mat); l.position.set(p[0], 0.55, p[1]); scene.add(l);
             }
 
             window.addEventListener('resize', () => {
@@ -499,15 +728,14 @@
 
         // --- Управление 3D NPC ---
         function spawn3DClient(orderId) {
-            const geo = new THREE.BoxGeometry(0.8, 1.6, 0.8);
             const colors = [0xFF9AA2, 0xFFB7B2, 0xFFDAC1, 0xE2F0CB, 0xB5EAD7, 0xC7CEEA];
-            const mat = new THREE.MeshPhysicalMaterial({ color: colors[Math.floor(Math.random()*colors.length)], roughness: 0.5, clearcoat: 0.4 });
-            const mesh = new THREE.Mesh(geo, mat);
-            mesh.position.set(15, 0.8, 10); // Вход из-за экрана
+            const colorTheme = colors[Math.floor(Math.random()*colors.length)];
+            const mesh = createHuman(colorTheme, false);
+            mesh.position.set(15, 0, 10); // Вход из-за экрана
             scene.add(mesh);
             
             const targetX = -4 + (orders.length * 1.8); // Место у стойки
-            npcs3D[orderId] = { mesh, target: new THREE.Vector3(targetX, 0.8, 3), state: 'ordering' };
+            npcs3D[orderId] = { mesh, target: new THREE.Vector3(targetX, 0, 3), state: 'ordering' };
         }
 
         function remove3DClient(orderId) {
@@ -515,7 +743,7 @@
             // Клиент идет за столик или радуется
             npcs3D[orderId].state = 'served';
             const rndTable = [[-6, 5], [6, 5]][Math.floor(Math.random()*2)];
-            npcs3D[orderId].target = new THREE.Vector3(rndTable[0], 0.8, rndTable[1]);
+            npcs3D[orderId].target = new THREE.Vector3(rndTable[0], 0, rndTable[1]);
             
             // Удаляем через 4 секунды
             setTimeout(() => {
@@ -566,11 +794,37 @@
             setTimeout(() => { if(el.parentNode) el.remove() }, 1500);
         }
 
+        function toggleMobileMenu() {
+            const mainEl = document.querySelector('main');
+            mainEl.classList.toggle('open');
+            const isOpen = mainEl.classList.contains('open');
+            playSound('click');
+        }
+
         // --- 4. Игровая Логика UI ---
         function updateUI() {
             document.getElementById('ui-coins').innerText = Math.floor(state.coins);
             document.getElementById('ui-cozy').innerText = state.cozyLevel;
             document.getElementById('ui-q').innerText = orders.length;
+            
+            const btnToggle = document.getElementById('mobile-menu-toggle');
+            if(btnToggle) {
+                const readyCount = orders.filter(o => o.state === 'ready').length;
+                btnToggle.innerText = `📋 Меню (${orders.length})` + (readyCount > 0 ? ' ❗️' : '');
+                if(readyCount > 0) {
+                    btnToggle.style.background = 'var(--color-accent-gold)';
+                    btnToggle.style.color = 'var(--color-text)';
+                } else {
+                    btnToggle.style.background = 'var(--color-accent-pink)';
+                    btnToggle.style.color = 'white';
+                }
+            }
+            
+            const daysOpen = Math.floor(state.totalTime / 120) + 1;
+            document.getElementById('ui-day-counter').innerText = '📅 День ' + daysOpen;
+            
+            const pop = Math.floor(state.upgrades.marketing * 5 + state.cozyLevel * 0.1);
+            document.getElementById('ui-pop').innerText = pop;
 
             const upgCont = document.getElementById('upgrades-container');
             upgCont.innerHTML = '';
@@ -583,7 +837,7 @@
                             <span>${u.icon} ${u.title}</span> <span>Ур. ${lvl}${max?'(МАКС)':''}</span>
                         </div>
                         <div style="font-size:0.9rem; color:var(--color-accent-pink); margin-bottom:10px;">${u.effect(lvl)}</div>
-                        ${!max ? `<button class="btn" style="background:${can?'var(--color-accent-gold)':'#eaeaea'}" ${can?'':'disabled'} onclick="buyUpg('${id}', event)">Улучшить 🪙 ${cost}</button>` : `<button class="btn" disabled>Абсолютный уют</button>`}
+                        ${!max ? `<button class="btn" style="background:${can?'var(--color-accent-gold)':'#eaeaea'}" ${can?'':'disabled'} onclick="buyUpg('${id}', event)">Улучшить 🪙 ${cost}</button>` : `<button class="btn" disabled>Всё доступно!</button>`}
                     </div>`;
             }
 
@@ -591,8 +845,8 @@
             ordCont.innerHTML = '';
             orders.forEach(o => {
                 const item = MENU.find(m => m.id === o.itemId);
-                const payout = Math.floor(item.price * (1 + state.upgrades.decor*0.15));
-                const pct = (o.progress / item.time) * 100;
+                const payout = Math.floor(item.price * getTipMultiplier());
+                const pct = (o.progress / getPrepTime(item.time)) * 100;
                 
                 let btn = '';
                 if(o.state === 'waiting') btn = `<button class="btn" onclick="startOrder(${o.id})">Приготовить</button>`;
@@ -608,6 +862,50 @@
                         ${btn}
                     </div>`;
             });
+            
+            // Рекламная кнопка
+            const adsCont = document.getElementById('ads-container');
+            if (adsCont) {
+                adsCont.innerHTML = ADS.map(a => {
+                    const isActive = activeAdId === a.id && timers.ad > 0;
+                    const canBuy = state.coins >= a.cost && timers.ad <= 0;
+                    let btnText = isActive ? `До окончания: ${Math.ceil(timers.ad)}с` : (timers.ad > 0 ? 'Ждите окончания' : `Купить 🪙 ${a.cost}`);
+                    return `
+                    <div class="card">
+                        <div style="display:flex; justify-content:space-between; font-weight:bold; margin-bottom:5px;">
+                            <span>${a.icon} ${a.name}</span>
+                        </div>
+                        <div style="font-size:0.9rem; color:var(--color-accent-pink); margin-bottom:10px;">
+                            ${isActive ? '<span style="color:var(--color-accent-gold)">Работает!</span>' : 'Буст х' + a.boost + ' на ' + a.duration + 'с'}
+                        </div>
+                        <button class="btn" style="background:${canBuy?'var(--color-accent-gold)':'#eaeaea'}" ${canBuy?'':'disabled'} onclick="buyAd('${a.id}')">
+                            ${btnText}
+                        </button>
+                    </div>`;
+                }).join('');
+            }
+            
+            // Ивент Баннер
+            const evBanner = document.getElementById('event-banner');
+            if(timers.gameEvent > 0 && activeEvent.id) {
+                evBanner.style.display = 'block';
+                document.getElementById('event-title').innerText = `⚠️ ${activeEvent.name} (${Math.ceil(timers.gameEvent)}с)`;
+                document.getElementById('event-desc').innerText = activeEvent.desc;
+            } else {
+                evBanner.style.display = 'none';
+            }
+        }
+
+        window.buyAd = function(id) {
+            const adObj = ADS.find(a => a.id === id);
+            if(adObj && state.coins >= adObj.cost && timers.ad <= 0) {
+                state.coins -= adObj.cost;
+                timers.ad = adObj.duration;
+                activeAdId = adObj.id;
+                activeAdBoost = adObj.boost;
+                playSound('upgrade');
+                updateUI();
+            }
         }
 
         window.buyUpg = function(id, event) {
@@ -637,7 +935,7 @@
             playSound('serve');
             const idx = orders.findIndex(x=>x.id===id); if(idx < 0) return;
             const o = orders[idx], it = MENU.find(m => m.id === o.itemId);
-            const payout = Math.floor(it.price * (1 + state.upgrades.decor*0.15));
+            const payout = Math.floor(it.price * getTipMultiplier());
             state.coins += payout; state.cozyLevel++;
             
             const x = event ? event.clientX : window.innerWidth / 2;
@@ -660,13 +958,19 @@
         function loop(t) {
             const dt = (t - lastTime) / 1000; lastTime = t;
 
-            // Время суток
-            timers.day += dt; const dLen = 60, ph = (timers.day % dLen)/dLen;
+            // Время суток (1 цикл = 120 сек)
+            state.totalTime += dt; 
+            const dLen = 120, ph = (state.totalTime % dLen)/dLen;
             let cls = 'morning', title = '🌅 Утро';
             if(ph>0.25) { cls='day'; title='☀️ День'; }
             if(ph>0.5)  { cls='evening'; title='🌆 Вечер'; }
             if(ph>0.75) { cls='night'; title='🌙 Ночь'; }
-            if(document.body.className !== cls) { document.body.className = cls; document.getElementById('ui-time').innerText = title; }
+            
+            if(document.body.className !== cls) { 
+                document.body.className = cls; 
+                currentPhaseStr = cls;
+                document.getElementById('ui-time').innerText = title; 
+            }
 
             // Обновление шейдеров (цветов света и фона)
             if(scene && ambientLight && directionalLight) {
@@ -695,14 +999,34 @@
                     });
                 }
             }
+            
+            // Динамические таймеры событий
+            let timersChanged = false;
+            if(timers.gameEvent > 0) {
+                timers.gameEvent -= dt;
+                if(timers.gameEvent <= 0) activeEvent.id = null;
+                timersChanged = true;
+            } else if (Math.random() < 0.002) { // случайный шанс каждую сек. (не часто)
+                const ev = GAME_EVENTS[Math.floor(Math.random()*GAME_EVENTS.length)];
+                activeEvent = ev;
+                timers.gameEvent = ev.duration;
+                playSound('event');
+                timersChanged = true;
+            }
+
+            if(timers.ad > 0) {
+                timers.ad -= dt;
+                timersChanged = true;
+            }
 
             // Обновление прогресса заказов
             let changed = false;
             orders.forEach(o => {
                 if(o.state === 'prep') {
                     const it = MENU.find(m => m.id === o.itemId);
+                    const reqTime = getPrepTime(it.time);
                     o.progress += dt;
-                    if(o.progress >= it.time) { o.progress = it.time; o.state = 'ready'; }
+                    if(o.progress >= reqTime) { o.progress = reqTime; o.state = 'ready'; }
                     changed = true;
                 }
             });
@@ -721,11 +1045,14 @@
 
             // Спавн Посетителей
             timers.spawn -= dt;
-            if(timers.spawn <= 0) { createOrder(); timers.spawn = 4 + Math.random()*5; }
+            if(timers.spawn <= 0) { 
+                createOrder(); 
+                timers.spawn = getSpawnRate() * (0.8 + Math.random()*0.4); // Рандомизация к базовому
+            }
 
-            // Спавн Событий
-            timers.event += dt;
-            if(timers.event > 15) { if(Math.random()<0.3) triggerEvent(); timers.event = 0; }
+            // Спавн Текстовых Событий (атмосфера)
+            timers.eventText += dt;
+            if(timers.eventText > 15) { if(Math.random()<0.3) triggerEvent(); timers.eventText = 0; }
 
             // Обновление 3D
             const bMesh = scene.getObjectByName("barista");
@@ -738,7 +1065,7 @@
             }
             renderer.render(scene, camera);
 
-            if(changed) updateUI();
+            if(changed || timersChanged) updateUI();
             if(Math.random() < 0.01) localStorage.setItem('cafe3DState', JSON.stringify(state)); // Редкое автосохранение
 
             requestAnimationFrame(loop);
@@ -749,6 +1076,25 @@
             initAudio();
             init3D();
             updateUI();
+            
+            if (initOfflineCoins > 0) {
+                setTimeout(() => {
+                    const d = document.createElement('div'); 
+                    d.className = 'toast'; 
+                    d.innerHTML = '✨ Пока вас не было, заработано: 🪙 ' + initOfflineCoins;
+                    const cont = document.getElementById('notifications-container'); 
+                    cont.appendChild(d);
+                    setTimeout(()=> { if(d.parentNode) cont.removeChild(d); }, 8000);
+                    playSound('upgrade');
+                    
+                    for(let i=0; i<10; i++) {
+                        setTimeout(() => {
+                            createParticles(window.innerWidth / 2, window.innerHeight / 2, '🪙', 3);
+                        }, i * 150);
+                    }
+                }, 1000);
+            }
+            
             lastTime = performance.now();
             requestAnimationFrame(loop);
         }
