@@ -564,7 +564,9 @@
         function init3D() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 100);
-            camera.position.set(0, 12, 16); camera.lookAt(0, 0, 0);
+            const isMob = window.innerWidth < 768;
+            camera.position.set(0, isMob ? 14 : 7, isMob ? 18 : 10); 
+            camera.lookAt(0, 0, 0);
             
             renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas3d'), alpha: true, antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -721,7 +723,11 @@
             }
 
             window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+                camera.aspect = window.innerWidth / window.innerHeight; 
+                const isMob = window.innerWidth < 768;
+                camera.position.set(0, isMob ? 14 : 7, isMob ? 18 : 10);
+                camera.lookAt(0, 0, 0);
+                camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
         }
